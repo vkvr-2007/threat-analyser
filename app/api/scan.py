@@ -1,6 +1,8 @@
 from fastapi import APIRouter
 from datetime import datetime
 
+from app.db.crud import fetch_history
+from app.db.crud import insert_scan
 from app.models.schemas import ScanRequest
 from app.services.input_utils import normalize_input
 from app.services.content_scanner import scan_content
@@ -10,6 +12,10 @@ from app.services.scoring_engine import calculate_threat_score
 
 
 router = APIRouter()
+
+@router.get("/history")
+def get_history(limit: int = 10):
+    return fetch_history(limit)
 
 
 @router.post("/scan")
@@ -33,12 +39,13 @@ def scan_input(request: ScanRequest):
     )
 
     return {
-        "input_type": request.input_type,
-        "input_value": request.input_value,
-        "content_analysis": content_scan,
-        "domain_intelligence": intel,
-        "kill_chain": kill_chain,
-        "threat_score": threat_score,
-        "threat_level": threat_level,
-        "timestamp": datetime.utcnow().isoformat()
+    "input_type": request.input_type,
+    "input_value": request.input_value,
+    "current_stage": kill_chain["current_stage"],
+    "next_stage": kill_chain["next_stage"],
+    "threat_level": threat_level,
+    "threat_score": threat_score,
+    "ml_confidence": ml_confidence,
+    "reasons": ", ".join(kill_chain["reasons"]),
+    "timestamp": datetime.utcnow()
     }
