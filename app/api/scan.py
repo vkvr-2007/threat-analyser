@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from datetime import datetime
 
+from app.services.excel_sync import sync_scans_to_excel
 from app.models.schemas import ScanRequest
 from app.services.input_utils import normalize_input
 from app.services.content_scanner import scan_content
@@ -54,7 +55,15 @@ def scan_input(request: ScanRequest):
             "reasons": ", ".join(kill_chain.get("reasons", [])),
             "timestamp": datetime.utcnow()
         })
+        
     except Exception as e:
+        print("⚠️ DB insert failed:", e)
+
+    # 8️⃣ Sync to Excel
+    try:
+        sync_scans_to_excel()
+    except Exception as e:
+        print("⚠️ Excel sync failed:", e)
         # DB failure should NEVER break scanning
         print("⚠️ DB insert failed:", e)
 
