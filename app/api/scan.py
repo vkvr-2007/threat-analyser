@@ -1,6 +1,12 @@
 from fastapi import APIRouter
 from datetime import datetime
+from fastapi import UploadFile, File
+import tempfile
+import os
 
+
+
+from app.services.stego_image import analyze_image_steganography
 from app.services.excel_sync import sync_scans_to_excel
 from app.models.schemas import ScanRequest
 from app.services.input_utils import normalize_input
@@ -40,6 +46,9 @@ def scan_input(request: ScanRequest):
         ml_confidence,
         kill_chain["severity_weight"]
     )
+
+
+
 
     # database insertion
     try:
@@ -84,3 +93,45 @@ def get_history(limit: int = 10):
     Fetch past scans from DB
     """
     return fetch_history(limit)
+
+
+@router.post("/scan/image")
+async def scan_image(file: UploadFile = File(...)):
+    """
+    Image steganography scan
+    """
+
+    # Save temp file
+    suffix = os.path.splitext(file.filename)[1]
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        tmp.write(await file.read())
+        tmp_path = tmp.name
+
+    try:
+        result = analyze_image_steganography(tmp_path)
+
+        # Kill chain mapping
+        if result["confidence"] == "High":
+            kill_chain = {
+                "current_stage": "Command and Control",
+                "next_stage": "Execution",
+                "severity_weight": 0.9,
+                "reasons": ["Hidden payload detected in image"]
+            }
+        else:
+            kill_chain = {
+                "current_stage": "Reconnaissance",
+                "next_stage": "Initial Access",
+                "severity_weight": 0.2,
+                "reasons": ["No malicious payload is found"]
+            }
+
+        return {
+            "filename": file.filename,
+            "stego_analysis": result,
+            "kill_chain": kill_chain
+        }
+
+    finally:
+        os.remove(tmp_path)
+
