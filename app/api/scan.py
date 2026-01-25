@@ -15,34 +15,33 @@ router = APIRouter()
 
 @router.post("/scan")
 def scan_input(request: ScanRequest):
-    """
-    Main scan endpoint
-    """
+    
+    """ main scan endpoint"""
 
-    # 1️⃣ Normalize input
+    # input normalization
     normalized = normalize_input(request.input_type, request.input_value)
 
-    # 2️⃣ Content scanning (works for URL + text)
+    # content scanning
     content_scan = scan_content(request.input_value)
 
-    # 3️⃣ Domain intelligence (URL only)
+    # domain intelligence
     intel = {}
     if normalized["type"] == "url":
         intel = gather_intelligence(normalized["url"])
 
-    # 4️⃣ ML confidence (stub for now)
+    # ml confidence (sub for now)
     ml_confidence = 0.75
 
-    # 5️⃣ Kill chain mapping
+    # 5️kill chain mapping
     kill_chain = map_to_kill_chain(intel, content_scan)
 
-    # 6️⃣ Threat scoring
+    # threat score
     threat_score, threat_level = calculate_threat_score(
         ml_confidence,
         kill_chain["severity_weight"]
     )
 
-    # 7️⃣ Store scan in PostgreSQL (SAFE)
+    # database insertion
     try:
         insert_scan({
             "input_type": request.input_type,
@@ -59,15 +58,14 @@ def scan_input(request: ScanRequest):
     except Exception as e:
         print("⚠️ DB insert failed:", e)
 
-    # 8️⃣ Sync to Excel
+    # excel file data
     try:
         sync_scans_to_excel()
     except Exception as e:
         print("⚠️ Excel sync failed:", e)
-        # DB failure should NEVER break scanning
         print("⚠️ DB insert failed:", e)
 
-    # 8️⃣ Final response
+    # response
     return {
         "input_type": request.input_type,
         "input_value": request.input_value,
