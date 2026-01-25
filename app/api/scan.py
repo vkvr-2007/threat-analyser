@@ -15,6 +15,8 @@ from app.services.intel_aggregator import gather_intelligence
 from app.services.rule_engine import map_to_kill_chain
 from app.services.scoring_engine import calculate_threat_score
 from app.db.crud import insert_scan, fetch_history
+from app.services.stego_audio import analyze_audio_steganography
+
 
 router = APIRouter()
 
@@ -175,6 +177,57 @@ async def scan_text_or_binary(file: UploadFile = File(...)):
                 "next_stage": "Initial Access",
                 "severity_weight": 0.2,
                 "reasons": ["No malicious content detected"]
+            }
+
+        return {
+            "filename": file.filename,
+            "stego_analysis": result,
+            "kill_chain": kill_chain
+        }
+
+    finally:
+        os.remove(tmp_path)
+
+
+@router.post("/scan/audio")
+async def scan_audio(file: UploadFile = File(...)):
+    """
+    Audio steganography scan
+    """
+
+    import tempfile
+    import os
+
+    suffix = os.path.splitext(file.filename)[1]
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        tmp.write(await file.read())
+        tmp_path = tmp.name
+
+    try:
+        result = analyze_audio_steganography(tmp_path)
+
+        # Kill chain mapping
+        if result["confidence"] == "High":
+            kill_chain = {
+                "current_stage": "Command and Control",
+                "next_stage": "Execution",
+                "severity_weight": 0.9,
+                "reasons": ["Hidden instructions or payload detected in audio"]
+            }
+        elif result["confidence"] == "Medium":
+            kill_chain = {
+                "current_stage": "Delivery",
+                "next_stage": "Execution",
+                "severity_weight": 0.6,
+                "reasons": ["Encoded or metadata payload detected"]
+            }
+        else:
+            kill_chain = {
+                "current_stage": "Reconnaissance",
+                "next_stage": "Initial Access",
+                "severity_weight": 0.2,
+                "reasons": ["No steganographic indicators found"]
             }
 
         return {
