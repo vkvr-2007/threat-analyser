@@ -1,10 +1,12 @@
 from fastapi import APIRouter
 from datetime import datetime
 from fastapi import UploadFile, File
+
 import tempfile
+import uuid
 import os
 
-
+from app.services.file_scan_engine import scan_file_static
 from app.services.stego_text import analyze_text_binary_steganography
 from app.services.stego_image import analyze_image_steganography
 from app.services.excel_sync import sync_scans_to_excel
@@ -291,3 +293,44 @@ async def scan_video(file: UploadFile = File(...)):
 
     finally:
         os.remove(tmp_path)
+
+
+
+
+UPLOAD_DIR = "uploaded_files"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+@router.post("/scan-file")
+async def scan_uploaded_file(file: UploadFile = File(...)):
+
+    # 1️⃣ Save uploaded file
+    file_id = str(uuid.uuid4())
+    saved_path = os.path.join(UPLOAD_DIR, f"{file_id}_{file.filename}")
+
+    with open(saved_path, "wb") as f:
+        f.write(await file.read())
+
+    # 2️⃣ Static file scan
+    scan_result = scan_file_static(saved_path)
+
+    # 3️⃣ Kill chain mapping (FILE)
+    kill_chain = map_file_to_kill_chain(scan_result)
+
+    # 4️⃣ Threat scoring
+    ml_confidence = 0.0  # ML optional for now
+
+    threat_score, threat_level = calculate_threat_score(
+        ml_confidence,
+        kill_chain["severity_weight"]
+    )
+
+    # 5️⃣ Final response
+    return {
+        "input_type": "file",
+        "file_name": file.filename,
+        "analysis": scan_result,
+        "kill_chain": kill_chain,
+        "threat_level": threat_level,
+        "threat_score": threat_score
+    }
